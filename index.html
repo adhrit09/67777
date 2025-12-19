@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Epic Driving Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+            overflow: hidden;
+        }
+        #gameContainer {
+            text-align: center;
+        }
+        #startOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #startOverlay.hidden {
+            display: none;
+        }
+        #startBtn {
+            padding: 20px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            -webkit-tap-highlight-color: transparent;
+        }
+        #startBtn:hover, #startBtn:active {
+            background: #2563eb;
+        }
+        h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        #scoreDisplay {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+        #highScoreDisplay {
+            font-size: 18px;
+            color: #fbbf24;
+            margin-bottom: 10px;
+        }
+        .controls-info {
+            color: #9ca3af;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        #canvasContainer {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        #gameCanvas {
+            border: 4px solid #374151;
+            border-radius: 8px;
+        }
+        .arrow-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            font-size: 36px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .arrow-btn:active {
+            background: #1d4ed8;
+        }
+        .arrow-btn:hover {
+            background: #2563eb;
+        }
+        #gameOverOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+        }
+        #gameOverOverlay.show {
+            display: flex;
+        }
+        #gameOverContent {
+            text-align: center;
+        }
+        #gameOverContent h2 {
+            font-size: 48px;
+            color: #ef4444;
+            margin-bottom: 20px;
+        }
+        #finalScore {
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        #playAgainBtn {
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        #playAgainBtn:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div id="startOverlay">
+        <button id="startBtn">🎮 Start Game</button>
+    </div>
+
+    <div id="gameContainer">
+        <h1>Epic Driving Game</h1>
+        <div id="scoreDisplay">Score: <span id="score">0</span></div>
+        <div id="highScoreDisplay">High Score: <span id="highScore">0</span></div>
+        <div class="controls-info">Use Arrow Keys or Buttons to Steer</div>
+        
+        <div id="canvasContainer">
+            <button class="arrow-btn" id="leftBtn">←</button>
+            <div style="position: relative;">
+                <canvas id="gameCanvas" width="400" height="600"></canvas>
+                <div id="gameOverOverlay">
+                    <div id="gameOverContent">
+                        <h2>Game Over!</h2>
+                        <div id="finalScore">Final Score: 0</div>
+                        <button id="playAgainBtn">Play Again</button>
+                    </div>
+                </div>
+            </div>
+            <button class="arrow-btn" id="rightBtn">→</button>
+        </div>
+        
+        <div class="controls-info">← → Steer Left and Right</div>
+    </div>
+
+    <script>
+        // Load external libraries dynamically with fallback
+        let musicEnabled = false;
+        let isPokiInitialized = false;
+
+        // Try to load Tone.js
+        const toneScript = document.createElement('script');
+        toneScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
+        toneScript.onerror = function() {
+            console.log('Music library not available - continuing without music');
+        };
+        toneScript.onload = function() {
+            musicEnabled = true;
+        };
+        document.head.appendChild(toneScript);
+
+        // Try to load Poki SDK
+        const pokiScript = document.createElement('script');
+        pokiScript.src = 'https://game-cdn.poki.com/scripts/v2/poki-sdk.js';
+        pokiScript.onerror = function() {
+            console.log('Poki SDK not available');
+        };
+        pokiScript.onload = function() {
+            try {
+                if (window.PokiSDK) {
+                    window.PokiSDK.init().then(() => {
+                        isPokiInitialized = true;
+                        window.PokiSDK.gameLoadingFinished();
+                    }).catch(() => {});
+                }
+            } catch(e) {}
+        };
+        document.head.appendChild(pokiScript);
+
+        // Prevent console errors from breaking the game
+        window.addEventListener('error', function(e) {
+            e.preventDefault();
+            return true;
+        });
+
+        // Safe console override
+        (function() {
+            const noop = function() {};
+            if (!window.console) {
+                window.console = {};
+            }
+            const methods = ['log', 'warn', 'error', 'info', 'debug', 'trace'];
+            methods.forEach(method => {
+                const original = window.console[method];
+                window.console[method] = function() {
+                    // Silently ignore
+                };
+            });
+        })();
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+        const finalScoreEl = document.getElementById('finalScore');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const startOverlay = document.getElementById('startOverlay');
+        const startBtn = document.getElementById('startBtn');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+
+        let score = 0;
+        let highScore = 0;
+        let gameOver = false;
+        let musicStarted = false;
+        let gamePaused = false;
+        let musicSynths = null;
+
+        const keys = { left: false, right: false };
+        const touch = { left: false, right: false };
+
+        const obstacleTypes = [
+            { color: '#ff3333', name: 'red' },
+            { color: '#33ff33', name: 'green' },
+            { color: '#ffaa00', name: 'orange' },
+            { color: '#ff33ff', name: 'purple' },
+            { color: '#00ffff', name: 'cyan' }
+        ];
+
+        let gameState = {
+            car: { x: 100, y: 400, width: 40, height: 70 },
+            obstacles: [],
+            roadLines: [],
+            speed: 3,
+            lastObstacle: 0,
+            lastLine: 0
+        };
+
+        // Keyboard controls
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'ArrowRight') keys.right = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+        });
+
+        // Touch/Mouse controls
+        leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); touch.left = true; });
+        leftBtn.addEventListener('touchend', (e) => { e.preventDefault(); touch.left = false; });
+        leftBtn.addEventListener('mousedown', (e) => { e.preventDefault(); touch.left = true; });
+        leftBtn.addEventListener('mouseup', (e) => { e.preventDefault(); touch.left = false; });
+        leftBtn.addEventListener('mouseleave', () => { touch.left = false; });
+
+        rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); touch.right = true; });
+        rightBtn.addEventListener('touchend', (e) => { e.preventDefault(); touch.right = false; });
+        rightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); touch.right = true; });
+        rightBtn.addEventListener('mouseup', (e) => { e.preventDefault(); touch.right = false; });
+        rightBtn.addEventListener('mouseleave', () => { touch.right = false; });
+
+        function checkCollision(car, obstacle) {
+            return car.x < obstacle.x + obstacle.width &&
+                   car.x + car.width > obstacle.x &&
+                   car.y < obstacle.y + obstacle.height &&
+                   car.y + car.height > obstacle.y;
+        }
+
+        function resetGame() {
+            gameState = {
+                car: { x: 100, y: 400, width: 40, height: 70 },
+                obstacles: [],
+                roadLines: [],
+                speed: 3,
+                lastObstacle: 0,
+                lastLine: 0
+            };
+            score = 0;
+            gameOver = false;
+            gamePaused = false;
+            scoreEl.textContent = '0';
+            gameOverOverlay.classList.remove('show');
+            
+            if (isPokiInitialized) {
+                try {
+                    window.PokiSDK.gameplayStart();
+                } catch(e) {}
+            }
+        }
+
+        function pauseGame() {
+            gamePaused = true;
+            try {
+                if (musicSynths && window.Tone && window.Tone.Transport.state === 'started') {
+                    window.Tone.Transport.pause();
+                }
+            } catch(e) {}
+        }
+
+        function resumeGame() {
+            gamePaused = false;
+            try {
+                if (musicSynths && window.Tone && window.Tone.Transport.state === 'paused') {
+                    window.Tone.Transport.start();
+                }
+            } catch(e) {}
+            if (!gameOver) {
+                gameLoop();
+            }
+        }
+
+        function startMusic() {
+            if (musicStarted) return;
+            
+            try {
+                Tone.start().then(() => {
+                    musicStarted = true;
+                    startOverlay.classList.add('hidden');
+
+                    const bass = new Tone.Synth({
+                        oscillator: { type: 'triangle' },
+                        envelope: { attack: 0.1, decay: 0.3, sustain: 0.4, release: 0.8 }
+                    }).toDestination();
+                    bass.volume.value = -10;
+
+                    const melody = new Tone.Synth({
+                        oscillator: { type: 'sine' },
+                        envelope: { attack: 0.05, decay: 0.2, sustain: 0.3, release: 0.5 }
+                    }).toDestination();
+                    melody.volume.value = -8;
+
+                    const harmony = new Tone.PolySynth(Tone.Synth).toDestination();
+                    harmony.volume.value = -15;
+
+                    musicSynths = { bass, melody, harmony };
+
+                const melodyPattern = [
+                    ['D4', '8n'], ['E4', '8n'], ['F4', '8n'], ['G4', '4n'],
+                    ['A4', '8n'], ['G4', '8n'], ['F4', '4n'], ['E4', '8n'],
+                    ['D4', '8n'], ['C4', '8n'], ['D4', '4n'], ['F4', '4n'],
+                    ['G4', '8n'], ['A4', '8n'], ['Bb4', '2n']
+                ];
+
+                const bassPattern = [
+                    ['D2', '4n'], ['D2', '8n'], ['A2', '8n'],
+                    ['D2', '4n'], ['F2', '8n'], ['G2', '8n']
+                ];
+
+                const chordPattern = [
+                    [['D3', 'F3', 'A3'], '2n'],
+                    [['C3', 'E3', 'G3'], '2n'],
+                    [['Bb2', 'D3', 'F3'], '2n'],
+                    [['A2', 'C3', 'E3'], '2n']
+                ];
+
+                let melodyIndex = 0;
+                let bassIndex = 0;
+                let chordIndex = 0;
+
+                Tone.Transport.scheduleRepeat((time) => {
+                    const [note, duration] = melodyPattern[melodyIndex];
+                    melody.triggerAttackRelease(note, duration, time);
+                    melodyIndex = (melodyIndex + 1) % melodyPattern.length;
+                }, '8n');
+
+                Tone.Transport.scheduleRepeat((time) => {
+                    const [note, duration] = bassPattern[bassIndex];
+                    bass.triggerAttackRelease(note, duration, time);
+                    bassIndex = (bassIndex + 1) % bassPattern.length;
+                }, '4n');
+
+                Tone.Transport.scheduleRepeat((time) => {
+                    const [notes, duration] = chordPattern[chordIndex];
+                    harmony.triggerAttackRelease(notes, duration, time);
+                    chordIndex = (chordIndex + 1) % chordPattern.length;
+                }, '2n');
+
+                Tone.Transport.bpm.value = 140;
+                Tone.Transport.start();
+
+                if (isPokiInitialized) {
+                    PokiSDK.gameplayStart();
+                }
+
+                gameLoop();
+            });
+        }
+
+        function gameLoop() {
+            if (gameOver || gamePaused) return;
+
+            const { car, obstacles, roadLines } = gameState;
+
+            // Update car position
+            if ((keys.left || touch.left) && car.x > 80) car.x -= 4;
+            if ((keys.right || touch.right) && car.x < 272) car.x += 4;
+
+            const constantSpeed = 5;
+            gameState.speed += 0.001;
+
+            // Update obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].y += gameState.speed + constantSpeed;
+                
+                if (obstacles[i].y > 600) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    scoreEl.textContent = score;
+                    if (score > highScore) {
+                        highScore = score;
+                        highScoreEl.textContent = highScore;
+                    }
+                } else if (checkCollision(car, obstacles[i])) {
+                    gameOver = true;
+                    finalScoreEl.textContent = `Final Score: ${score}`;
+                    gameOverOverlay.classList.add('show');
+                    
+                    if (isPokiInitialized) {
+                        try {
+                            window.PokiSDK.gameplayStop();
+                        } catch(e) {}
+                    }
+                    
+                    if (isPokiInitialized && score > 0) {
+                        pauseGame();
+                        try {
+                            window.PokiSDK.commercialBreak().then(() => {
+                                resumeGame();
+                            });
+                        } catch(e) {
+                            resumeGame();
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // Add new obstacles
+            gameState.lastObstacle++;
+            if (gameState.lastObstacle > 30) {
+                const lanes = [88, 136, 184, 232, 280];
+                const lane = lanes[Math.floor(Math.random() * lanes.length)];
+                const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+                obstacles.push({ x: lane, y: -100, width: 40, height: 70, type });
+                gameState.lastObstacle = 0;
+            }
+
+            // Update road lines
+            for (let i = roadLines.length - 1; i >= 0; i--) {
+                roadLines[i].y += gameState.speed + constantSpeed;
+                if (roadLines[i].y > 600) roadLines.splice(i, 1);
+            }
+
+            gameState.lastLine++;
+            if (gameState.lastLine > 20) {
+                roadLines.push({ y: -20 });
+                gameState.lastLine = 0;
+            }
+
+            // Draw everything
+            ctx.fillStyle = '#2d5016';
+            ctx.fillRect(0, 0, 400, 600);
+
+            ctx.fillStyle = '#404040';
+            ctx.fillRect(80, 0, 240, 600);
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(80, 0);
+            ctx.lineTo(80, 600);
+            ctx.moveTo(200, 0);
+            ctx.lineTo(200, 600);
+            ctx.moveTo(320, 0);
+            ctx.lineTo(320, 600);
+            ctx.stroke();
+
+            obstacles.forEach(obs => {
+                ctx.fillStyle = obs.type.color;
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(obs.x + 5, obs.y + 10, 10, 10);
+                ctx.fillRect(obs.x + 25, obs.y + 10, 10, 10);
+            });
+
+            ctx.fillStyle = '#3366ff';
+            ctx.fillRect(car.x, car.y, car.width, car.height);
+            ctx.fillStyle = '#ffff00';
+            ctx.fillRect(car.x + 5, car.y + 50, 10, 10);
+            ctx.fillRect(car.x + 25, car.y + 50, 10, 10);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        startBtn.addEventListener('click', startMusic);
+        playAgainBtn.addEventListener('click', () => {
+            resetGame();
+            gameLoop();
+        });
+
+        // Handle visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                pauseGame();
+            } else {
+                resumeGame();
+            }
+        });
+    </script>
+</body>
+</html>
